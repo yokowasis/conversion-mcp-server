@@ -7,11 +7,13 @@ A powerful Model Context Protocol (MCP) server for converting documents between 
 - 🔄 **HTML to PDF**: Convert HTML content or web pages to PDF format
 - 📝 **Markdown to HTML**: Transform Markdown content to HTML with full styling
 - 📄 **Markdown to PDF**: Direct conversion from Markdown to PDF with custom styling
-- 🌐 **URL to PDF**: Convert any web page URL directly to PDF
-- 📁 **File Conversions**: Batch process HTML and Markdown files
+- 📋 **HTML to DOCX**: Convert HTML content to Microsoft Word format
+- 📑 **Markdown to DOCX**: Transform Markdown directly to DOCX with formatting
+- 🌐 **URL to PDF/DOCX**: Convert any web page URL directly to PDF or DOCX
+- 📁 **File Conversions**: Batch process HTML and Markdown files to multiple formats
 - 🛡️ **Security**: Built-in HTML sanitization for untrusted content
-- ⚡ **Fast**: Uses latest Puppeteer (v24.19.0) and Marked (v16.2.1)
-- 🎨 **Customizable**: Full control over PDF options, margins, formats, and styling
+- ⚡ **Fast**: Uses latest Puppeteer (v24.19.0), Marked (v16.2.1), and html-docx-js
+- 🎨 **Customizable**: Full control over PDF/DOCX options, margins, formats, and styling
 - 📦 **TypeScript**: Complete type safety and modern JavaScript features
 - 🚀 **Production Ready**: Optimized for headless environments and CI/CD
 
@@ -125,6 +127,76 @@ Convert Markdown content directly to PDF format.
 }
 ```
 
+### `html_to_docx`
+Convert HTML content to DOCX format with customizable options.
+
+**Input:**
+- `html` (string): HTML content to convert
+- `output_path` (string): Full path where DOCX should be saved
+- `options` (object, optional): DOCX generation options
+  - `orientation`: Page orientation (portrait, landscape)
+  - `margins`: Custom margins in twips (1440 = 1 inch)
+    - `top`, `right`, `bottom`, `left`: Page margins
+    - `header`, `footer`, `gutter`: Additional margin options
+  - `title`: Document title
+  - `subject`: Document subject
+  - `creator`: Document creator/author
+  - `keywords`: Document keywords
+  - `description`: Document description
+
+**Example:**
+```json
+{
+  "html": "<h1>Hello World</h1><p>This is a test document with <strong>bold</strong> text.</p>",
+  "output_path": "/Users/username/Documents/output.docx",
+  "options": {
+    "orientation": "portrait",
+    "title": "My Document",
+    "creator": "John Doe",
+    "margins": {
+      "top": 1440,
+      "right": 1440,
+      "bottom": 1440,
+      "left": 1440
+    }
+  }
+}
+```
+
+### `markdown_to_docx`
+Convert Markdown content directly to DOCX format.
+
+**Input:**
+- `markdown` (string): Markdown content to convert
+- `output_path` (string): Full path where DOCX should be saved
+- `options` (object, optional): Combined Markdown and DOCX options
+  - `title`: Document title
+  - `orientation`: Page orientation (portrait, landscape)
+  - `margins`: Custom margins in twips
+  - `gfm`: Use GitHub Flavored Markdown (default: true)
+  - `breaks`: Convert single line breaks to `<br>` (default: false)
+  - `sanitize`: Sanitize HTML output (default: false)
+  - `fullDocument`: Create full HTML document with CSS (default: true)
+  - `subject`: Document subject
+  - `creator`: Document creator/author
+  - `keywords`: Document keywords
+  - `description`: Document description
+
+**Example:**
+```json
+{
+  "markdown": "# My Report\n\n## Summary\n\nThis is a **sample** report with *emphasis*.\n\n- Item 1\n- Item 2\n- Item 3",
+  "output_path": "/Users/username/Documents/report.docx",
+  "options": {
+    "title": "Monthly Report",
+    "creator": "Jane Smith",
+    "orientation": "portrait",
+    "gfm": true,
+    "fullDocument": true
+  }
+}
+```
+
 ### `file_to_pdf`
 Convert HTML or Markdown files to PDF format.
 
@@ -146,6 +218,32 @@ Convert HTML or Markdown files to PDF format.
 }
 ```
 
+### `file_to_docx`
+Convert HTML or Markdown files to DOCX format.
+
+**Input:**
+- `input_path` (string): Path to input file (.html, .htm, .md, .markdown)
+- `output_path` (string): Full path where DOCX should be saved
+- `options` (object, optional): Format-specific conversion options
+  - `title`: Document title (auto-generated from filename if not provided)
+  - `orientation`: Page orientation (portrait, landscape)
+  - `margins`: Custom margins in twips
+  - `sanitize`: Sanitize HTML output (default: false)
+  - `creator`: Document creator/author
+
+**Example:**
+```json
+{
+  "input_path": "/Users/username/Documents/input.md",
+  "output_path": "/Users/username/Documents/output.docx",
+  "options": {
+    "title": "Converted Document",
+    "orientation": "portrait",
+    "creator": "Document Converter"
+  }
+}
+```
+
 ## 📋 Prerequisites
 
 - Node.js v18.0.0 or higher
@@ -161,6 +259,9 @@ Run directly without installation:
 ```bash
 # Test the server
 npx conversion-mcp-server help
+
+# Show help information
+npx conversion-mcp-server --help
 ```
 
 #### For Claude Desktop Integration:
@@ -229,14 +330,25 @@ Once integrated with Claude Desktop, you can:
 ```
 "Convert this HTML to PDF: <h1>Hello World</h1><p>This is a test.</p>"
 
+"Convert this HTML to DOCX: <h1>Hello World</h1><p>This is a test.</p>"
+
 "Convert this Markdown to PDF and save it to ~/Documents/report.pdf:
 # My Report
 ## Summary
 This is a **sample** report."
 
+"Convert this Markdown to DOCX and save it to ~/Documents/report.docx:
+# My Report
+## Summary
+This is a **sample** report with *emphasis*."
+
 "Convert the webpage https://example.com to PDF format"
 
+"Convert the webpage https://example.com to DOCX format"
+
 "Convert my markdown file at ~/Documents/notes.md to a PDF"
+
+"Convert my markdown file at ~/Documents/notes.md to a DOCX"
 ```
 
 ## 📁 Project Structure
@@ -246,8 +358,10 @@ conversion-mcp-server/
 ├── src/
 │   ├── converters/
 │   │   ├── htmlToPdf.ts          # HTML to PDF conversion
+│   │   ├── htmlToDocx.ts         # HTML to DOCX conversion
 │   │   ├── markdownToHtml.ts     # Markdown to HTML conversion
 │   │   ├── markdownToPdf.ts      # Markdown to PDF conversion
+│   │   ├── markdownToDocx.ts     # Markdown to DOCX conversion
 │   │   └── index.ts              # Converter exports
 │   ├── index.ts                  # Main MCP server
 │   └── http-server.ts            # HTTP server mode
@@ -277,6 +391,13 @@ conversion-mcp-server/
 4. **PDF Generation**: Generates PDF with specified options
 5. **File Output**: Saves PDF to specified location
 
+### HTML to DOCX
+1. **HTML Processing**: Validates and processes HTML content
+2. **Metadata Integration**: Adds document properties (title, author, etc.)
+3. **DOCX Generation**: Uses html-docx-js library for conversion
+4. **Buffer Handling**: Handles Blob/Buffer conversion for Node.js
+5. **File Output**: Saves DOCX to specified location
+
 ### Markdown to HTML
 1. **Markdown Parsing**: Uses Marked library to parse Markdown
 2. **HTML Generation**: Converts to clean HTML with GFM support
@@ -288,6 +409,12 @@ conversion-mcp-server/
 2. **Integrated Styling**: Automatic CSS styling for readability
 3. **Document Structure**: Full HTML document generation
 4. **PDF Optimization**: Optimized for print layouts
+
+### Markdown to DOCX
+1. **Three-Step Process**: Markdown → HTML → DOCX
+2. **Style Integration**: Automatic CSS styling and document formatting
+3. **Document Structure**: Full HTML document with metadata
+4. **DOCX Optimization**: Optimized for Microsoft Word compatibility
 
 ## 🔒 Security Features
 
@@ -306,6 +433,14 @@ conversion-mcp-server/
 - **Scale**: 0.1x to 2x webpage rendering scale
 - **Background**: Option to include/exclude background graphics
 - **Headers/Footers**: Custom header and footer templates
+
+### DOCX Options
+- **Orientation**: Portrait or Landscape
+- **Margins**: Custom margins in twips (1440 twips = 1 inch)
+  - Page margins: top, right, bottom, left
+  - Additional: header, footer, gutter margins
+- **Document Properties**: Title, subject, creator, keywords, description
+- **Content Processing**: HTML sanitization and styling options
 
 ### Markdown Options
 - **GitHub Flavored Markdown**: Full GFM support
@@ -351,6 +486,7 @@ conversion-mcp-server/
 
 ### Output Formats
 - **PDF**: High-quality PDF documents
+- **DOCX**: Microsoft Word compatible documents
 - **HTML**: Clean, styled HTML documents
 
 ## 📄 License
@@ -376,4 +512,4 @@ MIT License - see LICENSE file for details.
 
 **Ready to convert documents?** 🚀
 
-Configure Claude Desktop and start converting HTML/Markdown to PDF!
+Configure Claude Desktop and start converting HTML/Markdown to PDF and DOCX!
