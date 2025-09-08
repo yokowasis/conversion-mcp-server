@@ -1,6 +1,6 @@
 {
   "name": "conversion-mcp-server",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "MCP Server for converting HTML/Markdown to PDF and other formats using Puppeteer and Marked",
   "main": "dist/index.js",
   "type": "module",
