@@ -3,6 +3,7 @@
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import path from 'path';
 import { promises as fs, existsSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -27,6 +28,8 @@ Convert Commands:
   convert html-to-pdf <input.html> <output.pdf>   Convert HTML to PDF
   convert md-to-docx <input.md> <output.docx>     Convert Markdown to DOCX
   convert html-to-docx <input.html> <output.docx> Convert HTML to DOCX
+  convert file-to-html <input> <output.html>      Convert file to HTML (Markdown files)
+  convert file-to-docx <input> <output.docx>      Convert file to DOCX (HTML/Markdown files)
 
 Options:
   --port, -p    Port for HTTP server (default: 3000)
@@ -46,6 +49,9 @@ Examples:
   npx conversion-mcp-server convert md-to-pdf report.md report.pdf
   npx conversion-mcp-server convert html-to-pdf page.html page.pdf
   npx conversion-mcp-server convert md-to-docx notes.md notes.docx
+  npx conversion-mcp-server convert html-to-docx document.html document.docx
+  npx conversion-mcp-server convert file-to-html README.md README.html
+  npx conversion-mcp-server convert file-to-docx report.md report.docx
 
 The stdio mode is used by MCP clients (like Claude Desktop) for direct communication.
 The HTTP mode provides a web server with REST endpoints and SSE transport.
@@ -135,6 +141,17 @@ async function convertFile(conversionType, inputFile, outputFile, options = {}) 
         convertFunction = 'convertHtmlToDocx';
         break;
       }
+      case 'file-to-html': {
+        const { MarkdownToHtmlConverter } = await import(join(distDir, 'markdownToHtml.js'));
+        converter = MarkdownToHtmlConverter;
+        convertFunction = 'convertMarkdownFileToHtml';
+        break;
+      }
+      case 'file-to-docx': {
+        // Will handle both HTML and Markdown files
+        convertFunction = 'convertFileToDocx';
+        break;
+      }
       default:
         console.error(`Error: Unknown conversion type "${conversionType}"`);
         process.exit(1);
@@ -165,6 +182,73 @@ async function convertFile(conversionType, inputFile, outputFile, options = {}) 
       }
 
       await fs.writeFile(outputFile, htmlOutput, 'utf-8');
+    } else if (conversionType === 'file-to-html') {
+      // Special handling for file to HTML conversion
+      const fileExtension = path.extname(inputFile).toLowerCase();
+      
+      if (fileExtension === '.md' || fileExtension === '.markdown') {
+        const markdown = await fs.readFile(inputFile, 'utf-8');
+        const result = await converter.convertMarkdownToHtml(markdown, {
+          gfm: true,
+          breaks: false,
+          sanitize: false
+        });
+
+        if (!result.success) {
+          console.error(`Conversion failed: ${result.error}`);
+          process.exit(1);
+        }
+
+        let htmlOutput = result.data;
+
+        if (options.fullDoc) {
+          const title = options.title || path.basename(inputFile, fileExtension);
+          htmlOutput = converter.createFullHtmlDocument(htmlOutput, title);
+        }
+
+        await fs.writeFile(outputFile, htmlOutput, 'utf-8');
+      } else {
+        console.error(`Unsupported file type for HTML conversion: ${fileExtension}. Supported types: .md, .markdown`);
+        process.exit(1);
+      }
+    } else if (conversionType === 'file-to-docx') {
+      // Special handling for file to DOCX conversion
+      const fileExtension = path.extname(inputFile).toLowerCase();
+      let conversionOptions = {
+        title: options.title || path.basename(inputFile, fileExtension),
+      };
+      
+      if (fileExtension === '.html' || fileExtension === '.htm') {
+        const { HtmlToDocxConverter } = await import(join(distDir, 'htmlToDocx.js'));
+        const htmlContent = await fs.readFile(inputFile, 'utf-8');
+        const result = await HtmlToDocxConverter.convertHtmlToDocx(htmlContent, conversionOptions);
+        
+        if (!result.success) {
+          console.error(`Conversion failed: ${result.error}`);
+          process.exit(1);
+        }
+        
+        await fs.writeFile(outputFile, result.data);
+      } else if (fileExtension === '.md' || fileExtension === '.markdown') {
+        const { MarkdownToDocxConverter } = await import(join(distDir, 'markdownToDocx.js'));
+        const markdownContent = await fs.readFile(inputFile, 'utf-8');
+        const result = await MarkdownToDocxConverter.convertMarkdownToDocx(markdownContent, {
+          ...conversionOptions,
+          gfm: true,
+          breaks: false,
+          fullDocument: true,
+        });
+        
+        if (!result.success) {
+          console.error(`Conversion failed: ${result.error}`);
+          process.exit(1);
+        }
+        
+        await fs.writeFile(outputFile, result.data);
+      } else {
+        console.error(`Unsupported file type for DOCX conversion: ${fileExtension}. Supported types: .html, .htm, .md, .markdown`);
+        process.exit(1);
+      }
     } else {
       // Handle other conversion types
       let conversionOptions = {};
@@ -174,7 +258,21 @@ async function convertFile(conversionType, inputFile, outputFile, options = {}) 
       }
 
       let result;
-      if (conversionType.startsWith('md-')) {
+      if (conversionType.startsWith('md-') && (conversionType === 'md-to-docx')) {
+        // Special handling for md-to-docx which doesn't take output file path
+        const markdown = await fs.readFile(inputFile, 'utf-8');
+        result = await converter[convertFunction](markdown, conversionOptions);
+        if (result.success && result.data) {
+          await fs.writeFile(outputFile, result.data);
+        }
+      } else if (conversionType === 'html-to-docx') {
+        // Special handling for html-to-docx which doesn't take output file path
+        const html = await fs.readFile(inputFile, 'utf-8');
+        result = await converter[convertFunction](html, conversionOptions);
+        if (result.success && result.data) {
+          await fs.writeFile(outputFile, result.data);
+        }
+      } else if (conversionType.startsWith('md-')) {
         const markdown = await fs.readFile(inputFile, 'utf-8');
         result = await converter[convertFunction](markdown, outputFile, conversionOptions);
       } else {

@@ -12,7 +12,9 @@ import express from 'express';
 import { 
   HtmlToPdfConverter, 
   MarkdownToHtmlConverter, 
-  MarkdownToPdfConverter 
+  MarkdownToPdfConverter,
+  HtmlToDocxConverter,
+  MarkdownToDocxConverter
 } from './converters/index.js';
 
 class ConversionHttpServer {
@@ -49,7 +51,7 @@ class ConversionHttpServer {
         status: 'healthy', 
         timestamp: new Date().toISOString(),
         version: '1.0.0',
-        capabilities: ['HTML to PDF', 'Markdown to HTML', 'Markdown to PDF', 'URL to PDF']
+        capabilities: ['HTML to PDF', 'HTML to DOCX', 'Markdown to HTML', 'Markdown to PDF', 'Markdown to DOCX', 'URL to PDF']
       });
     });
 
@@ -143,6 +145,40 @@ class ConversionHttpServer {
         res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
       }
     });
+
+    this.app.post('/convert/html-to-docx', async (req, res) => {
+      try {
+        const { html, options } = req.body;
+        const result = await HtmlToDocxConverter.convertHtmlToDocx(html, options);
+        
+        if (!result.success || !result.data) {
+          return res.status(400).json({ error: result.error });
+        }
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        res.setHeader('Content-Disposition', 'attachment; filename="converted.docx"');
+        res.send(result.data);
+      } catch (error) {
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+      }
+    });
+
+    this.app.post('/convert/markdown-to-docx', async (req, res) => {
+      try {
+        const { markdown, options } = req.body;
+        const result = await MarkdownToDocxConverter.convertMarkdownToDocx(markdown, options);
+        
+        if (!result.success || !result.data) {
+          return res.status(400).json({ error: result.error });
+        }
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        res.setHeader('Content-Disposition', 'attachment; filename="converted.docx"');
+        res.send(result.data);
+      } catch (error) {
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+      }
+    });
   }
 
   private setupHandlers(): void {
@@ -210,6 +246,48 @@ class ConversionHttpServer {
               properties: {
                 markdown: { type: 'string', description: 'Markdown content' },
                 options: { type: 'object' },
+              },
+              required: ['markdown'],
+            },
+          },
+          {
+            name: 'html_to_docx',
+            description: 'Convert HTML content to DOCX format',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                html: { type: 'string', description: 'HTML content to convert to DOCX' },
+                options: {
+                  type: 'object',
+                  properties: {
+                    orientation: { type: 'string', enum: ['portrait', 'landscape'] },
+                    title: { type: 'string' },
+                    creator: { type: 'string' },
+                  }
+                },
+              },
+              required: ['html'],
+            },
+          },
+          {
+            name: 'markdown_to_docx',
+            description: 'Convert Markdown content to DOCX format',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                markdown: { type: 'string', description: 'Markdown content to convert to DOCX' },
+                options: {
+                  type: 'object',
+                  properties: {
+                    sanitize: { type: 'boolean' },
+                    gfm: { type: 'boolean' },
+                    breaks: { type: 'boolean' },
+                    fullDocument: { type: 'boolean' },
+                    orientation: { type: 'string', enum: ['portrait', 'landscape'] },
+                    title: { type: 'string' },
+                    creator: { type: 'string' },
+                  }
+                },
               },
               required: ['markdown'],
             },
@@ -353,6 +431,60 @@ class ConversionHttpServer {
             };
           }
 
+          case 'html_to_docx': {
+            const { html, options = {} } = args as { html: string; options?: any };
+            const result = await HtmlToDocxConverter.convertHtmlToDocx(html, options);
+            
+            if (!result.success || !result.data) {
+              return {
+                content: [{ type: 'text', text: result.error || 'Conversion failed' }],
+                isError: true,
+              };
+            }
+
+            // Return base64 encoded DOCX for HTTP transport
+            const base64Docx = result.data.toString('base64');
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `DOCX generated successfully (${Math.round(result.data.length / 1024)} KB)`,
+                },
+                {
+                  type: 'text',
+                  text: `Base64 DOCX Data:\ndata:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,${base64Docx}`,
+                },
+              ],
+            };
+          }
+
+          case 'markdown_to_docx': {
+            const { markdown, options = {} } = args as { markdown: string; options?: any };
+            const result = await MarkdownToDocxConverter.convertMarkdownToDocx(markdown, options);
+            
+            if (!result.success || !result.data) {
+              return {
+                content: [{ type: 'text', text: result.error || 'Conversion failed' }],
+                isError: true,
+              };
+            }
+
+            // Return base64 encoded DOCX for HTTP transport
+            const base64Docx = result.data.toString('base64');
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `DOCX generated from markdown successfully (${Math.round(result.data.length / 1024)} KB)${result.metadata?.sanitized ? ' (HTML was sanitized)' : ''}`,
+                },
+                {
+                  type: 'text',
+                  text: `Base64 DOCX Data:\ndata:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,${base64Docx}`,
+                },
+              ],
+            };
+          }
+
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
@@ -393,15 +525,17 @@ class ConversionHttpServer {
                   name: 'conversion-mcp-server',
                   version: '1.0.0',
                   transport: 'http',
-                  capabilities: ['HTML to PDF', 'Markdown to HTML', 'Markdown to PDF', 'URL to PDF'],
+                  capabilities: ['HTML to PDF', 'HTML to DOCX', 'Markdown to HTML', 'Markdown to PDF', 'Markdown to DOCX', 'URL to PDF'],
                   supportedFormats: {
                     input: ['HTML', 'Markdown', 'URL'],
                     output: ['PDF', 'HTML'],
                   },
                   endpoints: [
                     '/convert/html-to-pdf',
+                    '/convert/html-to-docx',
                     '/convert/markdown-to-html',
                     '/convert/markdown-to-pdf',
+                    '/convert/markdown-to-docx',
                     '/convert/url-to-pdf',
                   ],
                 }, null, 2),
@@ -430,8 +564,10 @@ class ConversionHttpServer {
       console.error(`Message endpoint: http://localhost:${port}/message`);
       console.error(`Direct endpoints:`);
       console.error(`  - POST http://localhost:${port}/convert/html-to-pdf`);
+      console.error(`  - POST http://localhost:${port}/convert/html-to-docx`);
       console.error(`  - POST http://localhost:${port}/convert/markdown-to-html`);
       console.error(`  - POST http://localhost:${port}/convert/markdown-to-pdf`);
+      console.error(`  - POST http://localhost:${port}/convert/markdown-to-docx`);
       console.error(`  - POST http://localhost:${port}/convert/url-to-pdf`);
     });
 
