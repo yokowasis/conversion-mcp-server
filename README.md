@@ -257,11 +257,13 @@ Convert HTML or Markdown files to DOCX format.
 Run directly without installation:
 
 ```bash
-# Test the server
+# Show help information
 npx conversion-mcp-server help
 
-# Show help information
-npx conversion-mcp-server --help
+# Direct file conversion
+npx conversion-mcp-server convert md-to-html readme.md readme.html
+npx conversion-mcp-server convert md-to-pdf report.md report.pdf
+npx conversion-mcp-server convert html-to-pdf page.html page.pdf
 ```
 
 #### For Claude Desktop Integration:
@@ -307,6 +309,36 @@ For Claude Desktop with local installation:
   }
 }
 ```
+
+## 🖥️ CLI Usage
+
+### Direct File Conversion
+
+Convert files directly using the CLI without starting a server:
+
+```bash
+# Markdown to HTML conversion
+npx conversion-mcp-server convert md-to-html input.md output.html
+npx conversion-mcp-server convert md-to-html input.md output.html --full-doc --title "My Document"
+
+# Markdown to PDF conversion  
+npx conversion-mcp-server convert md-to-pdf report.md report.pdf --title "Monthly Report"
+
+# HTML to PDF conversion
+npx conversion-mcp-server convert html-to-pdf page.html page.pdf
+
+# Markdown to DOCX conversion
+npx conversion-mcp-server convert md-to-docx notes.md notes.docx --title "Meeting Notes"
+
+# HTML to DOCX conversion
+npx conversion-mcp-server convert html-to-docx document.html document.docx
+```
+
+### CLI Options
+
+- `--full-doc`: Create full HTML document with CSS styling (for md-to-html)
+- `--title "Document Title"`: Set the document title
+- `--help, -h`: Show help information
 
 ## 🖥️ Server Modes
 
